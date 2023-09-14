@@ -18,7 +18,6 @@ MAX_ATTEMPTS = 3
 app = Flask(__name__)
 
 
-
 # FaunaDB client setup
 FAUNA_SECRET = "fnAFNtTsG9AARFSwW429OKB31VOr71ICCRPWHvbI"
 client = FaunaClient(secret=FAUNA_SECRET)
