@@ -197,11 +197,12 @@ def generate_image():
     else:
         image_data = image_data  # Use the entire data if no prefix
 
-    image = Image.open(io.BytesIO(base64.b64decode(image_data)))
+    # Generate filename using hash
     filename = hashlib.md5(image_data.encode()).hexdigest()
-    filepath = os.path.join(IMAGE_DIR, f"{filename}.png")
-    image.save(filepath, format="PNG")
+
+    # Directly save to FaunaDB without saving to local storage
     image_ref = save_image_to_fauna(image_data, filename)
+
     return jsonify({"image_url": f"https://image-labs.onrender.com/images/{filename}"})
 
 
