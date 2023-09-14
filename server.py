@@ -17,6 +17,9 @@ MAX_ATTEMPTS = 3
 # Flask app initialization
 app = Flask(__name__)
 
+neg_prompt = "(worst quality:1.2), (low quality:1.2), (lowres:1.1), multiple views, comic, sketch, (((bad anatomy))), (((deformed))), (((disfigured))), watermark, multiple_views, mutation hands, mutation fingers, extra fingers, missing fingers, watermark"
+enhance_keywords = "((best quality)), ((masterpiece)), (detailed),"
+
 
 # FaunaDB client setup
 FAUNA_SECRET = "fnAFNtTsG9AARFSwW429OKB31VOr71ICCRPWHvbI"
@@ -98,7 +101,7 @@ def send_task_to_server(prompt, server_url, server_ref):
     """Send the image generation task to the given server and return the image data if successful."""
     mark_server_as_in_use(server_url, True)  # Set in_use to True
 
-    payload = {"prompt": prompt, "steps": 30}
+    payload = {"prompt": enhance_keywords + prompt, "steps": 30, "negative_prompt": neg_prompt,}
     response = requests.post(url=f'{server_url}sdapi/v1/txt2img', json=payload)
 
     if response.status_code != 200:
