@@ -101,7 +101,7 @@ def send_task_to_server(prompt, server_url, server_ref):
     """Send the image generation task to the given server and return the image data if successful."""
     mark_server_as_in_use(server_url, True)  # Set in_use to True
 
-    payload = {"prompt": enhance_keywords + prompt, "steps": 30, "negative_prompt": neg_prompt,}
+    payload = {"prompt": enhance_keywords + prompt, "steps": 20, "negative_prompt": neg_prompt,}
     response = requests.post(url=f'{server_url}sdapi/v1/txt2img', json=payload)
 
     if response.status_code != 200:
@@ -142,8 +142,7 @@ def decrement_server_thread(server_url):
 
 def backup_image_generation(prompt):
     attempt = 0
-    enhancedPrompt = prompt + ", animated, high quality, detailed, vibrant"
-    negativeKeywords = ["nsfw", "blurry", "ugly", "distorted face", "low quality"]
+    enhancedPrompt = enhance_keywords + prompt
 
     while attempt < MAX_ATTEMPTS:
         options = {
@@ -158,7 +157,7 @@ def backup_image_generation(prompt):
                 "guidance_scale": 7.5,
                 "safety_checker": "yes",
                 "embeddings_model": "rev-animated",
-                "negative_prompt": ", ".join(negativeKeywords),
+                "negative_prompt": neg_prompt,
             }
         }
 
