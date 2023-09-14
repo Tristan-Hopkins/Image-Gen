@@ -17,9 +17,7 @@ MAX_ATTEMPTS = 3
 # Flask app initialization
 app = Flask(__name__)
 
-# Image directory setup
-IMAGE_DIR = "/var/lib/data/"
-os.makedirs(IMAGE_DIR, exist_ok=True)
+
 
 # FaunaDB client setup
 FAUNA_SECRET = "fnAFNtTsG9AARFSwW429OKB31VOr71ICCRPWHvbI"
