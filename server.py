@@ -37,6 +37,24 @@ def mark_server_as_in_use(server_url, in_use_status):
         q.update(server_ref, {"data": {"in_use": in_use_status}})
     )
 
+def save_image_to_fauna(image_data, hash_id):
+    """Saves the image data to FaunaDB and returns the ref."""
+    print(f"Storing image with hash {hash_id} to FaunaDB...")
+    image_record = {
+        "hash_id": hash_id,
+        "data": image_data
+    }
+    result = client.query(q.create(q.collection("images"), {"data": image_record}))
+    return result["ref"]
+
+def get_image_from_fauna(hash_id):
+    """Retrieve the image data from FaunaDB using the hash id."""
+    try:
+        image_record = client.query(q.get(q.match(q.index("images_by_hash_id"), hash_id)))
+        return image_record["data"]["data"]
+    except:
+        print(f"Error fetching image with hash {hash_id} from FaunaDB.")
+        return None
 
 
 def get_available_servers():
@@ -97,8 +115,8 @@ def send_task_to_server(prompt, server_url, server_ref):
         mark_server_as_in_use(server_url, False)  # Set in_use to False after success
         return response.json()['images'][0]
 
-    print(f"Failed to generate image from server: {server_url}. Marking server as available again.")
-    mark_server_as_in_use(server_url, False)  # Set in_use to False after failure
+    print(f"Failed to generate image from server: {server_url}. Removing server from available servers.")
+    remove_server(server_ref)
     return None
 
 
@@ -186,17 +204,19 @@ def generate_image():
     filename = hashlib.md5(image_data.encode()).hexdigest()
     filepath = os.path.join(IMAGE_DIR, f"{filename}.png")
     image.save(filepath, format="PNG")
-
-    return jsonify({"image_url": f"/images/{filename}"})
+    image_ref = save_image_to_fauna(image_data, filename)
+    return jsonify({"image_url": f"https://image-labs.onrender.com/images/{filename}"})
 
 
 @app.route('/images/<hash_id>', methods=['GET'])
 def retrieve_image(hash_id):
-    filepath = os.path.join(IMAGE_DIR, f"{hash_id}.png")
-    if not os.path.exists(filepath):
+    image_data = get_image_from_fauna(hash_id)
+    if not image_data:
         return jsonify({"error": "Image not found"}), 404
 
-    return send_file(filepath, mimetype='image/png')
+    # Convert the base64 string back to binary
+    image_binary = io.BytesIO(base64.b64decode(image_data))
+    return send_file(image_binary, mimetype='image/png')
 
 
 if __name__ == '__main__':
