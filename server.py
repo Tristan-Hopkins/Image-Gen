@@ -15,7 +15,7 @@ MAX_ATTEMPTS = 3
 # Flask app initialization
 app = Flask(__name__)
 
-neg_prompt = "(worst quality:1.2), (low quality:1.2), (lowres:1.1), multiple views, comic, sketch, (((bad anatomy))), (((deformed))), (((disfigured))), watermark, multiple_views, mutation hands, mutation fingers, extra fingers, missing fingers, watermark"
+neg_prompt = "nsfw, nudity, naked, breasts, (worst quality:1.2), (low quality:1.2), (lowres:1.1), multiple views, comic, sketch, (((bad anatomy))), (((deformed))), (((disfigured))), watermark, multiple_views, mutation hands, mutation fingers, extra fingers, missing fingers, watermark"
 enhance_keywords = "((best quality)), ((masterpiece)), (detailed),"
 
 # Global counter for active requests
