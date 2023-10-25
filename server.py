@@ -64,7 +64,7 @@ def remove_server(server_ref):
 
 def send_task_to_ngrok_server(prompt):
     global active_requests
-    if active_requests < 2:
+    if active_requests < 20:
         active_requests += 1
         payload = {"prompt": enhance_keywords + prompt, "steps": 20, "negative_prompt": neg_prompt}
         
