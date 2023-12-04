@@ -62,11 +62,17 @@ def get_available_servers():
 def remove_server(server_ref):
     client.query(q.delete(server_ref))
 
-def send_task_to_ngrok_server(prompt):
+def send_task_to_ngrok_server(prompt, width="512", height="512"):
     global active_requests
     if active_requests < 20:
         active_requests += 1
-        payload = {"prompt": enhance_keywords + prompt, "steps": 20, "negative_prompt": neg_prompt}
+        payload = {
+            "prompt": enhance_keywords + prompt,
+            "steps": 20,
+            "negative_prompt": neg_prompt,
+            "width": width,   # Add width
+            "height": height  # Add height
+        }
         
         try:
             response = requests.post(NGROK_URL, json=payload, timeout=10)  # Added a timeout
@@ -76,17 +82,16 @@ def send_task_to_ngrok_server(prompt):
                 return response.json()['images'][0]
             else:
                 print(f"Failed to generate image from ngrok server with status code {response.status_code}. Using backup...")
-                return backup_image_generation(prompt)
+                return backup_image_generation(prompt, width, height)
         except requests.RequestException as e:
             print(f"Error occurred while connecting to ngrok server: {e}. Using backup...")
             active_requests -= 1
-            return backup_image_generation(prompt)
+            return backup_image_generation(prompt, width, height)
     else:
         print(f"Queue full. Redirecting to backup...")
-        return backup_image_generation(prompt)
+        return backup_image_generation(prompt, width, height)
 
-
-def backup_image_generation(prompt):
+def backup_image_generation(prompt, width="512", height="512"):
     attempt = 0
     enhancedPrompt = enhance_keywords + prompt
     while attempt < MAX_ATTEMPTS:
@@ -95,8 +100,8 @@ def backup_image_generation(prompt):
             'json': {
                 "key": BACKUP_API_KEY,
                 "prompt": enhancedPrompt,
-                "width": "512",
-                "height": "512",
+                "width": width,
+                "height": height,
                 "samples": "1",
                 "num_inference_steps": "20",
                 "guidance_scale": 7.5,
@@ -117,7 +122,11 @@ def generate_image():
     if not 'prompt' in request.json:
         return jsonify({'error': 'Bad request data'}), 400
     
-    image_data_or_url = send_task_to_ngrok_server(request.json['prompt'])
+    # Extract width and height from request JSON
+    width = request.json.get('width', "512")
+    height = request.json.get('height', "512")
+
+    image_data_or_url = send_task_to_ngrok_server(request.json['prompt'], width, height)
 
     # Check if the returned data is a URL from the backup generator
     if image_data_or_url.startswith('http'):
@@ -128,7 +137,6 @@ def generate_image():
     image_ref = save_image_to_fauna(image_data_or_url, filename)
     return jsonify({"image_url": f"https://image-labs.onrender.com/images/{filename}"})
 
-
 @app.route('/images/<hash_id>', methods=['GET'])
 def retrieve_image(hash_id):
     image_data = get_image_from_fauna(hash_id)
@@ -136,7 +144,6 @@ def retrieve_image(hash_id):
         return jsonify({"error": "Image not found"}), 404
     image_binary = io.BytesIO(base64.b64decode(image_data))
     return send_file(image_binary, mimetype='image/png')
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, threaded=True)
