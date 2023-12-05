@@ -1,31 +1,31 @@
-from flask import Flask, request, jsonify, send_file
+import os
 import requests
 import io
 import hashlib
 import base64
+from flask import Flask, request, jsonify, send_file
 from faunadb import query as q
 from faunadb.client import FaunaClient
-
+from novita_client import NovitaClient, Txt2ImgRequest, Samplers, ModelType, save_image
+active_requests = 0
 # Constants
-BACKUP_API_URL = 'https://stablediffusionapi.com/api/v3/text2img'
-BACKUP_API_KEY = 'Kep5yIY9sU58fd2ZXciZKc37bnLdRfjpu0fUvur74bVaz73wJVerd6BJjXYe'
 NGROK_URL = 'https://imagineit.ngrok.app/ImageGen'
 MAX_ATTEMPTS = 3
-
-# Flask app initialization
-app = Flask(__name__)
-
 neg_prompt = "nsfw, nudity, naked, breasts, (worst quality:1.2), (low quality:1.2), (lowres:1.1), multiple views, comic, sketch, (((bad anatomy))), (((deformed))), (((disfigured))), watermark, multiple_views, mutation hands, mutation fingers, extra fingers, missing fingers, watermark"
 enhance_keywords = "((best quality)), ((masterpiece)), (detailed),"
 
-# Global counter for active requests
-active_requests = 0
+# Flask app initialization
+app = Flask(__name__)
 
 # FaunaDB client setup
 FAUNA_SECRET = "fnAFNtTsG9AARFSwW429OKB31VOr71ICCRPWHvbI"
 client = FaunaClient(secret=FAUNA_SECRET)
 
-# The FaunaDB functions from the original code
+# Novita API Client
+NOVITA_API_KEY = os.getenv("NOVITA_API_KEY", "8f347388-1d5b-4153-8c3f-704f17bdb45e")
+novita_client = NovitaClient(NOVITA_API_KEY)
+
+# FaunaDB Functions
 
 def get_server_ref_by_url(server_url):
     server_data = client.query(q.get(q.match(q.index("servers_by_url"), server_url)))
@@ -92,30 +92,23 @@ def send_task_to_ngrok_server(prompt, width="512", height="512"):
         return backup_image_generation(prompt, width, height)
 
 def backup_image_generation(prompt, width="512", height="512"):
-    attempt = 0
-    enhancedPrompt = enhance_keywords + prompt
-    while attempt < MAX_ATTEMPTS:
-        options = {
-            'headers': {'Content-Type': 'application/json'},
-            'json': {
-                "key": BACKUP_API_KEY,
-                "prompt": enhancedPrompt,
-                "width": width,
-                "height": height,
-                "samples": "1",
-                "num_inference_steps": "20",
-                "guidance_scale": 7.5,
-                "safety_checker": "yes",
-                "embeddings_model": "rev-animated",
-                "negative_prompt": neg_prompt,
-            }
-        }
-        response = requests.post(BACKUP_API_URL, **options)
-        if response.status_code == 200 and 'output' in response.json() and response.json()['output']:
-            return response.json()['output'][0]
-        else:
-            attempt += 1
-    return 'https://i.imgur.com/tdGdu9l.png'
+    req = Txt2ImgRequest(
+        model_name='revAnimated_v122.safetensors',
+        prompt=enhance_keywords + prompt,
+        negative_prompt=neg_prompt,
+        width=int(width),
+        height=int(height),
+        sampler_name="DPM++ 2M Karras",
+        cfg_scale=8.5,
+        steps=20,
+        batch_size=1,
+        n_iter=1,
+        seed=-1,
+    )
+    output_image_bytes = novita_client.sync_txt2img(req).data.imgs_bytes[0]
+    hash_id = hashlib.md5(output_image_bytes).hexdigest()
+    image_ref = save_image_to_fauna(base64.b64encode(output_image_bytes).decode(), hash_id)
+    return f"https://image-labs.onrender.com/images/{hash_id}"
 
 @app.route('/generate-image', methods=['POST'])
 def generate_image():
