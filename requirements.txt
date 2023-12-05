@@ -2,3 +2,4 @@ Flask
 requests
 Pillow
 faunadb
+novita_client
