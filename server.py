@@ -7,12 +7,16 @@ from flask import Flask, request, jsonify, send_file
 from faunadb import query as q
 from faunadb.client import FaunaClient
 from novita_client import NovitaClient, Txt2ImgRequest, Samplers, ModelType, save_image
+
 active_requests = 0
+
 # Constants
 NGROK_URL = 'https://imagineit.ngrok.app/ImageGen'
 MAX_ATTEMPTS = 3
 neg_prompt = "nsfw, nudity, naked, breasts, (worst quality:1.2), (low quality:1.2), (lowres:1.1), multiple views, comic, sketch, (((bad anatomy))), (((deformed))), (((disfigured))), watermark, multiple_views, mutation hands, mutation fingers, extra fingers, missing fingers, watermark"
 enhance_keywords = "((best quality)), ((masterpiece)), (detailed),"
+IMAGE_DIR = "/var/data/images"
+os.makedirs(IMAGE_DIR, exist_ok=True)
 
 # Flask app initialization
 app = Flask(__name__)
@@ -62,6 +66,32 @@ def get_available_servers():
 def remove_server(server_ref):
     client.query(q.delete(server_ref))
 
+# Helper functions for image handling
+
+def save_image_to_disk(image_data, file_name):
+    file_path = os.path.join(IMAGE_DIR, f"{file_name}.png")
+
+    # Directly save the bytes data to disk
+    with open(file_path, 'wb') as image_file:
+        image_file.write(image_data)
+
+    return file_path
+
+
+def get_image_from_disk(hash_id):
+    if not hash_id.endswith(".png"):
+        hash_id += ".png"
+    file_path = os.path.join(IMAGE_DIR, hash_id)
+    
+    if not os.path.exists(file_path):
+        print(f"File not found: {file_path}")  # Simple logging
+        return None
+    
+    with open(file_path, 'rb') as image_file:
+        return image_file.read()
+
+# Image Generation and Backup Functions
+
 def send_task_to_ngrok_server(prompt, width="512", height="512"):
     global active_requests
     if active_requests < 20:
@@ -107,28 +137,50 @@ def backup_image_generation(prompt, width="512", height="512"):
     )
     output_image_bytes = novita_client.sync_txt2img(req).data.imgs_bytes[0]
     hash_id = hashlib.md5(output_image_bytes).hexdigest()
-    image_ref = save_image_to_fauna(base64.b64encode(output_image_bytes).decode(), hash_id)
-    return f"https://image-labs.onrender.com/images/{hash_id}"
 
+    # Save the image to disk as a V2 file
+    image_path = save_image_to_disk(output_image_bytes, f"{hash_id}_v2")
+
+    # Assuming the base URL for your server is 'https://yourserver.com'
+    # Adjust the URL format as needed for your application
+    return f"https://image-labs.onrender.com/imagesV2/{hash_id}_v2.png"
+
+
+# Flask Route Handlers
+# Updated generate_image function
 @app.route('/generate-image', methods=['POST'])
 def generate_image():
-    if not 'prompt' in request.json:
+    if 'prompt' not in request.json:
         return jsonify({'error': 'Bad request data'}), 400
-    
-    # Extract width and height from request JSON
+
+    prompt = request.json['prompt']
     width = request.json.get('width', "512")
     height = request.json.get('height', "512")
 
-    image_data_or_url = send_task_to_ngrok_server(request.json['prompt'], width, height)
+    image_data_or_url = send_task_to_ngrok_server(prompt, width, height)
+    
+    if image_data_or_url.startswith("http"):
+        # Download the image if it's a URL
+        response = requests.get(image_data_or_url)
+        image_bytes = response.content
+        hash_id = image_data_or_url.split('/')[-1].replace(".png", "")
+    else:
+        # If it's base64 encoded image data
+        image_bytes = base64.b64decode(image_data_or_url)
+        hash_id = hashlib.md5(image_bytes).hexdigest()
+        
+    save_image_to_disk(image_bytes, hash_id)
 
-    # Check if the returned data is a URL from the backup generator
-    if image_data_or_url.startswith('http'):
-        return jsonify({"image_url": image_data_or_url})
+    return jsonify({"image_url": f"https://image-labs.onrender.com/imagesV2/{hash_id}.png"})
 
-    # If it's not a URL, then it's image data, so we store it in FaunaDB
-    filename = hashlib.md5(image_data_or_url.encode()).hexdigest()
-    image_ref = save_image_to_fauna(image_data_or_url, filename)
-    return jsonify({"image_url": f"https://image-labs.onrender.com/images/{filename}"})
+def save_image_to_disk(image_bytes, hash_id):
+    file_path = os.path.join(IMAGE_DIR, f"{hash_id}.png")
+
+    with open(file_path, 'wb') as image_file:
+        image_file.write(image_bytes)
+
+    return file_path
+
 
 @app.route('/images/<hash_id>', methods=['GET'])
 def retrieve_image(hash_id):
@@ -137,6 +189,15 @@ def retrieve_image(hash_id):
         return jsonify({"error": "Image not found"}), 404
     image_binary = io.BytesIO(base64.b64decode(image_data))
     return send_file(image_binary, mimetype='image/png')
+
+@app.route('/imagesV2/<hash_id>', methods=['GET'])
+def retrieve_image_v2(hash_id):
+    image_data = get_image_from_disk(hash_id)
+    if image_data is None:
+        return jsonify({"error": "Image not found"}), 404
+    return send_file(io.BytesIO(image_data), mimetype='image/png')
+
+# Main Application Execution
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, threaded=True)
