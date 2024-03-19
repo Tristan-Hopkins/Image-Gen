@@ -88,7 +88,6 @@ def get_image_from_disk(hash_id):
     
     print(f"File not found for hash: {hash_id}")  # Simple logging
     return None, None
-
 # Image Generation and Backup Functions
 
 def send_task_to_ngrok_server(prompt, width="512", height="512"):
@@ -150,21 +149,22 @@ def backup_image_generation(prompt, width="512", height="512"):
     # Convert the image bytes to PIL Image
     image = Image.open(io.BytesIO(output_image_bytes))
 
-    # Save the image as WebP with a quality setting of 90
-    webp_quality_setting = 90
+    # Compress the image
+    compressed_image_bytes = io.BytesIO()
+    image.save(compressed_image_bytes, format='WebP', optimize=True, quality=80)
+    compressed_image_bytes.seek(0)
+
+    # Save the compressed image to disk
     webp_image_path = os.path.join(IMAGE_DIR, f"{hash_id}_v2.webp")
-    image.save(webp_image_path, "WEBP", quality=webp_quality_setting)
+    with open(webp_image_path, 'wb') as image_file:
+        image_file.write(compressed_image_bytes.getvalue())
 
-    # Check the size of the WebP image after setting the quality
+    # Check the size of the compressed WebP image
     webp_image_size = os.path.getsize(webp_image_path)
-    print("Quality 90 WebP image size (bytes):", webp_image_size)
+    print("Compressed WebP image size (bytes):", webp_image_size)
 
-    # Assuming the base URL for your server is 'https://yourserver.com'
-    # Adjust the URL format as needed for your application
-    return f"https://image-labs.onrender.com/imagesV2/{hash_id}_v2.webp", "webp"
-
-
-# Flask Route Handlers
+    # Return the base64-encoded compressed image data and the image format
+    return base64.b64encode(compressed_image_bytes.getvalue()).decode(), "webp"
 # Updated generate_image function
 @app.route('/generate-image', methods=['POST'])
 def generate_image():
@@ -210,11 +210,13 @@ def retrieve_image(hash_id):
 
 @app.route('/imagesV2/<hash_id>', methods=['GET'])
 def retrieve_image_v2(hash_id):
+    # Remove the file extension from the hash_id
+    hash_id = os.path.splitext(hash_id)[0]
+    
     image_data, image_format = get_image_from_disk(hash_id)
     if image_data is None:
         return jsonify({"error": "Image not found"}), 404
     return send_file(io.BytesIO(image_data), mimetype=f'image/{image_format}')
-
 # Main Application Execution
 
 if __name__ == '__main__':
