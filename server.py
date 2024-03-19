@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify, send_file
 from faunadb import query as q
 from faunadb.client import FaunaClient
 from novita_client import NovitaClient, Txt2ImgRequest, Samplers, ModelType, save_image
+from PIL import Image
 
 active_requests = 0
 
@@ -68,8 +69,8 @@ def remove_server(server_ref):
 
 # Helper functions for image handling
 
-def save_image_to_disk(image_data, file_name):
-    file_path = os.path.join(IMAGE_DIR, f"{file_name}.png")
+def save_image_to_disk(image_data, file_name, format="webp"):
+    file_path = os.path.join(IMAGE_DIR, f"{file_name}.{format}")
 
     # Directly save the bytes data to disk
     with open(file_path, 'wb') as image_file:
@@ -79,16 +80,41 @@ def save_image_to_disk(image_data, file_name):
 
 
 def get_image_from_disk(hash_id):
-    if not hash_id.endswith(".png"):
-        hash_id += ".png"
-    file_path = os.path.join(IMAGE_DIR, hash_id)
+    png_file_path = os.path.join(IMAGE_DIR, f"{hash_id}.png")
+    webp_file_path = os.path.join(IMAGE_DIR, f"{hash_id}.webp")
     
-    if not os.path.exists(file_path):
-        print(f"File not found: {file_path}")  # Simple logging
-        return None
+    if os.path.exists(webp_file_path):
+        with open(webp_file_path, 'rb') as image_file:
+            return image_file.read(), "webp"
+    elif os.path.exists(png_file_path):
+        with open(png_file_path, 'rb') as image_file:
+            return image_file.read(), "png"
+    else:
+        print(f"Image not found: {hash_id}")  # Simple logging
+        return None, None
+
+def convert_png_to_webp(png_bytes):
+    # Load the PNG image from bytes
+    png_image = Image.open(io.BytesIO(png_bytes))
     
-    with open(file_path, 'rb') as image_file:
-        return image_file.read()
+    # Create a BytesIO object to save the WebP image
+    webp_bytes = io.BytesIO()
+    
+    # Adjusting the WebP quality to 80.
+    webp_quality_setting = 80
+    
+    # Save the image with the quality setting of 80
+    png_image.save(webp_bytes, "WEBP", quality=webp_quality_setting)
+    
+    # Get the WebP image bytes
+    webp_bytes.seek(0)
+    webp_image_bytes = webp_bytes.read()
+    
+    # Check the size of the WebP image after setting the quality to 80
+    webp_image_size = len(webp_image_bytes)
+    print("Quality 80 WebP image size (bytes):", webp_image_size)
+    
+    return webp_image_bytes
 
 # Image Generation and Backup Functions
 
@@ -100,12 +126,12 @@ def send_task_to_ngrok_server(prompt, width="512", height="512"):
             "prompt": enhance_keywords + prompt,
             "steps": 20,
             "negative_prompt": neg_prompt,
-            "width": width,   # Add width
-            "height": height  # Add height
+            "width": width,
+            "height": height
         }
         
         try:
-            response = requests.post(NGROK_URL, json=payload, timeout=10)  # Added a timeout
+            response = requests.post(NGROK_URL, json=payload, timeout=10)
             active_requests -= 1
             
             if response.status_code == 200 and 'images' in response.json():
@@ -138,12 +164,13 @@ def backup_image_generation(prompt, width="512", height="512"):
     output_image_bytes = novita_client.sync_txt2img(req).data.imgs_bytes[0]
     hash_id = hashlib.md5(output_image_bytes).hexdigest()
 
-    # Save the image to disk as a V2 file
-    image_path = save_image_to_disk(output_image_bytes, f"{hash_id}_v2")
+    # Convert the PNG image to WebP
+    webp_image_bytes = convert_png_to_webp(output_image_bytes)
 
-    # Assuming the base URL for your server is 'https://yourserver.com'
-    # Adjust the URL format as needed for your application
-    return f"https://image-labs.onrender.com/imagesV2/{hash_id}_v2.png"
+    # Save the WebP image to disk
+    webp_image_path = save_image_to_disk(webp_image_bytes, f"{hash_id}_v2", format="webp")
+
+    return f"https://image-labs.onrender.com/imagesV2/{hash_id}_v2.webp"
 
 
 # Flask Route Handlers
@@ -163,18 +190,18 @@ def generate_image():
         # Download the image if it's a URL
         response = requests.get(image_data_or_url)
         image_bytes = response.content
-        hash_id = image_data_or_url.split('/')[-1].replace(".png", "")
+        hash_id = image_data_or_url.split('/')[-1].replace(".webp", "")
     else:
         # If it's base64 encoded image data
         image_bytes = base64.b64decode(image_data_or_url)
         hash_id = hashlib.md5(image_bytes).hexdigest()
         
-    save_image_to_disk(image_bytes, hash_id)
+    save_image_to_disk(image_bytes, hash_id, format="webp")
 
-    return jsonify({"image_url": f"https://image-labs.onrender.com/imagesV2/{hash_id}.png"})
+    return jsonify({"image_url": f"https://image-labs.onrender.com/imagesV2/{hash_id}.webp"})
 
-def save_image_to_disk(image_bytes, hash_id):
-    file_path = os.path.join(IMAGE_DIR, f"{hash_id}.png")
+def save_image_to_disk(image_bytes, hash_id, format="webp"):
+    file_path = os.path.join(IMAGE_DIR, f"{hash_id}.{format}")
 
     with open(file_path, 'wb') as image_file:
         image_file.write(image_bytes)
@@ -192,10 +219,16 @@ def retrieve_image(hash_id):
 
 @app.route('/imagesV2/<hash_id>', methods=['GET'])
 def retrieve_image_v2(hash_id):
-    image_data = get_image_from_disk(hash_id)
+    image_data, format = get_image_from_disk(hash_id)
     if image_data is None:
         return jsonify({"error": "Image not found"}), 404
-    return send_file(io.BytesIO(image_data), mimetype='image/png')
+    
+    if format == "png":
+        # Convert PNG to WebP
+        webp_image_bytes = convert_png_to_webp(image_data)
+        return send_file(io.BytesIO(webp_image_bytes), mimetype='image/webp')
+    else:
+        return send_file(io.BytesIO(image_data), mimetype='image/webp')
 
 # Main Application Execution
 
