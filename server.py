@@ -100,7 +100,6 @@ def send_task_to_ngrok_server(prompt, width="768", height="768"):
             "negative_prompt": neg_prompt,
             "width": width,
             "height": height,
-            "seed": 234234234234,
             "cfg_scale": 8.5,
         }
         
