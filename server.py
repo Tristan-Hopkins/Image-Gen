@@ -99,11 +99,14 @@ def send_task_to_ngrok_server(prompt, width="768", height="768"):
             "steps": 20,
             "negative_prompt": neg_prompt,
             "width": width,
-            "height": height
+            "height": height,
+            "seed": 234234234234,
+            "cfg_scale": 8.5,
         }
         
+        
         try:
-            response = requests.post(NGROK_URL, json=payload, timeout=10)
+            response = requests.post(NGROK_URL, json=payload, timeout=1000)
             active_requests -= 1
             
             if response.status_code == 200:
