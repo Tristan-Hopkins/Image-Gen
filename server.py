@@ -14,8 +14,8 @@ active_requests = 0
 # Constants
 NGROK_URL = 'https://imagineit.ngrok.app/ImageGen'
 MAX_ATTEMPTS = 3
-neg_prompt = "nsfw, nudity, naked, breasts, (worst quality:1.2), (low quality:1.2), (lowres:1.1), multiple views, comic, sketch, (((bad anatomy))), (((deformed))), (((disfigured))), watermark, multiple_views, mutation hands, mutation fingers, extra fingers, missing fingers, watermark"
-enhance_keywords = "((best quality)), ((masterpiece)), (detailed),"
+neg_prompt = "bad quality, bad anatomy, worst quality, low quality, low resolutions, extra fingers, blur, blurry, ugly, wrongs proportions, watermark, image artifacts, lowres, ugly, jpeg artifacts, deformed, noisy image, ugly faces"
+enhance_keywords = "graphic novel, vibrant, inked, High Quailty "
 IMAGE_DIR = "/var/data/images"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
@@ -90,7 +90,7 @@ def get_image_from_disk(hash_id):
     return None, None
 # Image Generation and Backup Functions
 
-def send_task_to_ngrok_server(prompt, width="512", height="512"):
+def send_task_to_ngrok_server(prompt, width="768", height="768"):
     global active_requests
     if active_requests < 20:
         active_requests += 1
