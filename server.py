@@ -14,7 +14,7 @@ active_requests = 0
 # Constants
 NGROK_URL = 'https://imagineit.ngrok.app/ImageGen'
 MAX_ATTEMPTS = 3
-neg_prompt = "bad quality, bad anatomy, worst quality, low quality, low resolutions, extra fingers, blur, blurry, ugly, wrongs proportions, watermark, image artifacts, lowres, ugly, jpeg artifacts, deformed, noisy image, ugly faces"
+neg_prompt = "bad quality,text, text bubbles ,comic frames, speech bubbles, dialogue balloons, or word balloons, watermark, image artifacts, lowres, ugly, ugly faces. nsfw, nude"
 enhance_keywords = "graphic novel, vibrant, inked, High Quailty "
 IMAGE_DIR = "/var/data/images"
 os.makedirs(IMAGE_DIR, exist_ok=True)
