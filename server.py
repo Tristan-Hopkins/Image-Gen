@@ -96,7 +96,7 @@ def send_task_to_ngrok_server(prompt, width="768", height="768"):
         active_requests += 1
         payload = {
             "prompt": enhance_keywords + prompt,
-            "steps": 6,
+            "steps": 4,
             "negative_prompt": neg_prompt,
             "width": width,
             "height": height,
