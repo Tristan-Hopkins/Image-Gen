@@ -15,7 +15,7 @@ active_requests = 0
 NGROK_URL = 'https://imagineit.ngrok.app/ImageGen'
 MAX_ATTEMPTS = 3
 neg_prompt = "bad quality,text, text bubbles ,comic frames, speech bubbles, dialogue balloons, or word balloons, watermark, image artifacts, lowres, ugly, ugly faces. nsfw, nude"
-enhance_keywords = "graphic novel, vibrant, inked, High Quailty "
+enhance_keywords = "graphic novel, vibrant, inked, High Quailty <lora:sdxl_lightning_4step_lora:1> "
 IMAGE_DIR = "/var/data/images"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
@@ -96,11 +96,11 @@ def send_task_to_ngrok_server(prompt, width="768", height="768"):
         active_requests += 1
         payload = {
             "prompt": enhance_keywords + prompt,
-            "steps": 20,
+            "steps": 4,
             "negative_prompt": neg_prompt,
             "width": width,
             "height": height,
-            "cfg_scale": 8.5,
+            "cfg_scale": 1,
         }
         
         
