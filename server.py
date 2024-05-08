@@ -92,7 +92,7 @@ def get_image_from_disk(hash_id):
 
 def send_task_to_ngrok_server(prompt, width="768", height="768"):
     global active_requests
-    if active_requests < 30:
+    if active_requests < 1000:
         active_requests += 1
         payload = {
             "prompt": enhance_keywords + prompt,
